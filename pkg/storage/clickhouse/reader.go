@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	sqlSelectProfiles = `SELECT %s FROM pprof_profiles WHERE service_name = ? %s;`
+	sqlSelectProfiles = `SELECT %s FROM pprof_profiles PREWHERE service_name = ? %s;`
 
 	sqlSelectServiceNames = `
 		SELECT DISTINCT service_name
@@ -152,7 +152,7 @@ func buildSQLSelectProfiles(columns []string, params *storage.FindProfilesParams
 	}
 
 	if params.CreatedAtMin.IsZero() {
-		return "", nil, fmt.Errorf("empty created_at min")
+		return "", nil, fmt.Errorf("empty createdAtMin")
 	}
 
 	createdAtMax := params.CreatedAtMax
@@ -160,10 +160,10 @@ func buildSQLSelectProfiles(columns []string, params *storage.FindProfilesParams
 		createdAtMax = time.Now().UTC()
 	}
 	if params.CreatedAtMin.After(createdAtMax) {
-		createdAtMax = params.CreatedAtMin
+		return "", nil, fmt.Errorf("createdAtMin after createdAtMax")
 	}
 
-	whereClause := make([]string, 0, 4)
+	whereConds := make([]string, 0, 4)
 	args := make([]interface{}, 1, 4)
 
 	args[0] = params.Service
@@ -173,14 +173,14 @@ func buildSQLSelectProfiles(columns []string, params *storage.FindProfilesParams
 		if err != nil {
 			return "", nil, err
 		}
-		whereClause = append(whereClause, "(profile_type = ?)")
+		whereConds = append(whereConds, "(profile_type = ?)")
 		args = append(args, ptype)
 	}
 
-	whereClause = append(whereClause, "(created_at >= ?)")
+	whereConds = append(whereConds, "(created_at >= ?)")
 	args = append(args, params.CreatedAtMin)
 
-	whereClause = append(whereClause, "(created_at < ?)")
+	whereConds = append(whereConds, "(created_at < ?)")
 	args = append(args, createdAtMax)
 
 	if len(params.Labels) > 0 {
@@ -190,14 +190,14 @@ func buildSQLSelectProfiles(columns []string, params *storage.FindProfilesParams
 			labels = append(labels, "(?, ?)")
 			args = append(args, label.Key, label.Value)
 		}
-		whereClause = append(whereClause, fmt.Sprintf("hasAll(arrayZip(labels.key, labels.value), [%s])", strings.Join(labels, ",")))
+		whereConds = append(whereConds, fmt.Sprintf("hasAll(arrayZip(labels.key, labels.value), [%s])", strings.Join(labels, ",")))
 	}
 
 	conds := make([]string, 0, 3)
-	if len(whereClause) > 0 {
-		conds = append(conds, "AND "+strings.Join(whereClause, " AND "))
+	if len(whereConds) > 0 {
+		conds = append(conds, "WHERE "+strings.Join(whereConds, " AND "))
 	}
-	conds = append(conds, "ORDER BY created_at, profile_type")
+	conds = append(conds, "ORDER BY service_name, profile_type, created_at")
 	if params.Limit > 0 {
 		conds = append(conds, fmt.Sprintf("LIMIT %d", params.Limit))
 	}

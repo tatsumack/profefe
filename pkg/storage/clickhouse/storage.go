@@ -111,7 +111,7 @@ select
 	sumForEach(values) as values,
 	any(`locations.func_name`) as funcs
 from pprof_samples
-group by digest;
+group by fingerprint;
 
 -- diff profiles
 select
@@ -120,9 +120,9 @@ select
     arrayMap(i -> cpu_vals[i] - cpu_vals[i-1], indexes) as diffs,
     any(funcs) as funcs
 FROM (
-    SELECT digest, values, `locations.func_name` as funcs
+    SELECT fingerprint, values, `locations.func_name` as funcs
     FROM pprof_samples
      ORDER BY profile_key)
-GROUP BY digest;
+GROUP BY fingerprint;
 
 */
